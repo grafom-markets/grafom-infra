@@ -8,9 +8,10 @@
 #
 # What it does:
 #   1. Syncs docker-compose.yml, .env, prometheus.yml to EC2:/opt/infra/compose/
-#   2. Syncs clickhouse-init/ SQL to EC2:/opt/infra/clickhouse/init/
+#   2. Syncs clickhouse-init/ and postgres-init/ SQL to EC2
 #   3. Runs docker-compose up -d on EC2
-#   4. Verifies all containers are running
+#   4. Ensures all per-service PostgreSQL databases exist
+#   5. Verifies all containers are running
 
 set -euo pipefail
 
@@ -20,6 +21,7 @@ EC2_HOST="13.51.159.243"
 EC2_USER="ubuntu"
 REMOTE_COMPOSE_DIR="/opt/infra/compose"
 REMOTE_CLICKHOUSE_DIR="/opt/infra/clickhouse/init"
+REMOTE_POSTGRES_DIR="/opt/infra/postgres/init"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # Parse flags
@@ -41,13 +43,14 @@ echo ""
 # -------------------------------------------------------------------------
 # Step 1: Ensure remote directories exist
 # -------------------------------------------------------------------------
-echo "[1/4] Ensuring remote directories..."
-${SSH_CMD} "sudo mkdir -p ${REMOTE_COMPOSE_DIR} ${REMOTE_CLICKHOUSE_DIR}"
+echo "[1/5] Ensuring remote directories..."
+${SSH_CMD} "sudo mkdir -p ${REMOTE_COMPOSE_DIR} ${REMOTE_CLICKHOUSE_DIR} ${REMOTE_POSTGRES_DIR} && \
+            mkdir -p /tmp/ch_init /tmp/pg_init"
 
 # -------------------------------------------------------------------------
 # Step 2: Sync files to EC2
 # -------------------------------------------------------------------------
-echo "[2/4] Syncing files..."
+echo "[2/5] Syncing files..."
 
 # Compose + prometheus
 ${SCP_CMD} "${SCRIPT_DIR}/docker-compose.yml" "${EC2_USER}@${EC2_HOST}:/tmp/docker-compose.yml"
@@ -63,23 +66,36 @@ else
 fi
 
 # ClickHouse init SQL
-${SCP_CMD} "${SCRIPT_DIR}/clickhouse-init/"*.sql "${EC2_USER}@${EC2_HOST}:/tmp/"
+${SCP_CMD} "${SCRIPT_DIR}/clickhouse-init/"*.sql "${EC2_USER}@${EC2_HOST}:/tmp/ch_init/"
+# PostgreSQL init SQL
+${SCP_CMD} "${SCRIPT_DIR}/postgres-init/"*.sql "${EC2_USER}@${EC2_HOST}:/tmp/pg_init/"
 ${SSH_CMD} "sudo mv /tmp/docker-compose.yml ${REMOTE_COMPOSE_DIR}/docker-compose.yml && \
             sudo mv /tmp/prometheus.yml ${REMOTE_COMPOSE_DIR}/prometheus.yml && \
-            sudo mv /tmp/*.sql ${REMOTE_CLICKHOUSE_DIR}/"
+            sudo mv /tmp/ch_init/*.sql ${REMOTE_CLICKHOUSE_DIR}/ && \
+            sudo mv /tmp/pg_init/*.sql ${REMOTE_POSTGRES_DIR}/"
 echo "  All files synced"
 
 # -------------------------------------------------------------------------
 # Step 3: docker-compose up
 # -------------------------------------------------------------------------
-echo "[3/4] Starting services..."
+echo "[3/5] Starting services..."
 ${SSH_CMD} "sudo docker-compose -f ${REMOTE_COMPOSE_DIR}/docker-compose.yml up -d" 2>&1
 
 # -------------------------------------------------------------------------
-# Step 4: Verify
+# Step 4: Ensure per-service PostgreSQL databases exist
+# docker-entrypoint-initdb.d only runs on first init (empty data volume).
+# This step handles existing Postgres data volumes by running the script explicitly.
 # -------------------------------------------------------------------------
 echo ""
-echo "[4/4] Verifying..."
+echo "[4/5] Creating PostgreSQL databases (idempotent)..."
+${SSH_CMD} "sudo docker exec compose_postgres_1 \
+    psql -U postgres -f /docker-entrypoint-initdb.d/001_create_databases.sql" 2>&1
+
+# -------------------------------------------------------------------------
+# Step 5: Verify
+# -------------------------------------------------------------------------
+echo ""
+echo "[5/5] Verifying..."
 ${SSH_CMD} 'sudo docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"'
 echo ""
 ${SSH_CMD} 'sudo docker stats --no-stream --format "table {{.Name}}\t{{.MemUsage}}"'

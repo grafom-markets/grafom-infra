@@ -41,6 +41,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - /opt/infra/postgres/init:/docker-entrypoint-initdb.d
     networks:
       - infra_net
     healthcheck:
