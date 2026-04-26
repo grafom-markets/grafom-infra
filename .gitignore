@@ -1,0 +1,17 @@
+# Environment files with real credentials
+.env
+ec2/.env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# SSH keys (should never be committed)
+*.pem
+*.key

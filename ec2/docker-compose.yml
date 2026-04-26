@@ -1,0 +1,183 @@
+# Grafom shared development infrastructure — EC2 (13.51.159.243)
+#
+# This is the canonical compose file for the shared EC2 dev/test instance.
+# All services in the Grafom ecosystem connect to these backends.
+#
+# Deployment:
+#   ./deploy.sh                     # sync and restart on EC2
+#
+# Manual (on EC2):
+#   cd /opt/infra/compose
+#   docker-compose up -d
+#
+# Services:
+#   postgres    — 5432   Tier 1 OLTP (arc-050)
+#   redis       — 6379   Tier 3 cache (arc-050)
+#   redpanda    — 9092   Event streaming / Kafka-compatible (arc-020)
+#   clickhouse  — 8123, 9000   Tier 2 time-series (arc-180)
+#   prometheus  — 9090   Metrics collection (arc-090)
+#   grafana     — 3000   Dashboards (arc-090)
+
+version: "3.8"
+
+x-restart: &restart_policy
+  restart: unless-stopped
+
+networks:
+  infra_net:
+    driver: bridge
+
+services:
+
+  # -------------------------------------------------------------------------
+  # Tier 1 — PostgreSQL 16 (OLTP)
+  # Per-service databases created via CREATE DATABASE.
+  # -------------------------------------------------------------------------
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - infra_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "5432:5432"
+    <<: *restart_policy
+
+  # -------------------------------------------------------------------------
+  # Tier 3 — Redis 7 (cache, sessions, rate limits)
+  # -------------------------------------------------------------------------
+  redis:
+    image: redis:7
+    command: ["redis-server", "--save", "60", "1", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    networks:
+      - infra_net
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "6379:6379"
+    <<: *restart_policy
+
+  # -------------------------------------------------------------------------
+  # Event streaming — Redpanda (Kafka-compatible)
+  # -------------------------------------------------------------------------
+  redpanda:
+    image: redpandadata/redpanda:latest
+    command:
+      - redpanda
+      - start
+      - --overprovisioned
+      - --smp=1
+      - --memory=512M
+      - --reserve-memory=0M
+      - --node-id=0
+      - --check=false
+    volumes:
+      - redpanda_data:/var/lib/redpanda/data
+    networks:
+      - infra_net
+    ports:
+      - "9092:9092"
+      - "9644:9644"
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster metadata --brokers 127.0.0.1:9092 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    <<: *restart_policy
+
+  # -------------------------------------------------------------------------
+  # Tier 2 — ClickHouse (time-series and analytics, arc-180)
+  # Init SQL in clickhouse-init/ creates grafom database + 20 tables/views.
+  # -------------------------------------------------------------------------
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.8-alpine
+    container_name: grafom_clickhouse
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+      - clickhouse_logs:/var/log/clickhouse-server
+      - /opt/infra/clickhouse/init:/docker-entrypoint-initdb.d
+    networks:
+      - infra_net
+    environment:
+      CLICKHOUSE_DB: grafom
+      CLICKHOUSE_USER: grafom
+      CLICKHOUSE_PASSWORD: grafom
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    healthcheck:
+      test: ["CMD", "clickhouse-client", "--query", "SELECT 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    <<: *restart_policy
+
+  # -------------------------------------------------------------------------
+  # Observability — Prometheus
+  # -------------------------------------------------------------------------
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    networks:
+      - infra_net
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sSf http://localhost:9090/-/ready || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "9090:9090"
+    <<: *restart_policy
+
+  # -------------------------------------------------------------------------
+  # Observability — Grafana
+  # -------------------------------------------------------------------------
+  grafana:
+    image: grafana/grafana:9.5.0
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+    volumes:
+      - grafana_data:/var/lib/grafana
+    networks:
+      - infra_net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sSf http://localhost:3000/api/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "3000:3000"
+    <<: *restart_policy
+
+volumes:
+  postgres_data:
+  redis_data:
+  redpanda_data:
+  clickhouse_data:
+  clickhouse_logs:
+  prometheus_data:
+  grafana_data:
