@@ -8,10 +8,11 @@
 #
 # What it does:
 #   1. Syncs docker-compose.yml, .env, prometheus.yml to EC2:/opt/infra/compose/
-#   2. Syncs clickhouse-init/ and postgres-init/ SQL to EC2
+#   2. Syncs clickhouse-init/, postgres-init/, kafka-init/ to EC2
 #   3. Runs docker-compose up -d on EC2
 #   4. Ensures all per-service PostgreSQL databases exist
-#   5. Verifies all containers are running
+#   5. Pre-creates Kafka topics with correct partition counts
+#   6. Verifies all containers are running
 
 set -euo pipefail
 
@@ -22,6 +23,7 @@ EC2_USER="ubuntu"
 REMOTE_COMPOSE_DIR="/opt/infra/compose"
 REMOTE_CLICKHOUSE_DIR="/opt/infra/clickhouse/init"
 REMOTE_POSTGRES_DIR="/opt/infra/postgres/init"
+REMOTE_KAFKA_DIR="/opt/infra/kafka/init"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # Parse flags
@@ -43,14 +45,14 @@ echo ""
 # -------------------------------------------------------------------------
 # Step 1: Ensure remote directories exist
 # -------------------------------------------------------------------------
-echo "[1/5] Ensuring remote directories..."
-${SSH_CMD} "sudo mkdir -p ${REMOTE_COMPOSE_DIR} ${REMOTE_CLICKHOUSE_DIR} ${REMOTE_POSTGRES_DIR} && \
+echo "[1/6] Ensuring remote directories..."
+${SSH_CMD} "sudo mkdir -p ${REMOTE_COMPOSE_DIR} ${REMOTE_CLICKHOUSE_DIR} ${REMOTE_POSTGRES_DIR} ${REMOTE_KAFKA_DIR} && \
             mkdir -p /tmp/ch_init /tmp/pg_init"
 
 # -------------------------------------------------------------------------
 # Step 2: Sync files to EC2
 # -------------------------------------------------------------------------
-echo "[2/5] Syncing files..."
+echo "[2/6] Syncing files..."
 
 # Compose + prometheus
 ${SCP_CMD} "${SCRIPT_DIR}/docker-compose.yml" "${EC2_USER}@${EC2_HOST}:/tmp/docker-compose.yml"
@@ -69,16 +71,20 @@ fi
 ${SCP_CMD} "${SCRIPT_DIR}/clickhouse-init/"*.sql "${EC2_USER}@${EC2_HOST}:/tmp/ch_init/"
 # PostgreSQL init SQL
 ${SCP_CMD} "${SCRIPT_DIR}/postgres-init/"*.sql "${EC2_USER}@${EC2_HOST}:/tmp/pg_init/"
+# Kafka init scripts
+${SCP_CMD} "${SCRIPT_DIR}/kafka-init/create-topics.sh" "${EC2_USER}@${EC2_HOST}:/tmp/create-topics.sh"
 ${SSH_CMD} "sudo mv /tmp/docker-compose.yml ${REMOTE_COMPOSE_DIR}/docker-compose.yml && \
             sudo mv /tmp/prometheus.yml ${REMOTE_COMPOSE_DIR}/prometheus.yml && \
             sudo mv /tmp/ch_init/*.sql ${REMOTE_CLICKHOUSE_DIR}/ && \
-            sudo mv /tmp/pg_init/*.sql ${REMOTE_POSTGRES_DIR}/"
+            sudo mv /tmp/pg_init/*.sql ${REMOTE_POSTGRES_DIR}/ && \
+            sudo mv /tmp/create-topics.sh ${REMOTE_KAFKA_DIR}/create-topics.sh && \
+            sudo chmod +x ${REMOTE_KAFKA_DIR}/create-topics.sh"
 echo "  All files synced"
 
 # -------------------------------------------------------------------------
 # Step 3: docker-compose up
 # -------------------------------------------------------------------------
-echo "[3/5] Starting services..."
+echo "[3/6] Starting services..."
 ${SSH_CMD} "sudo docker-compose -f ${REMOTE_COMPOSE_DIR}/docker-compose.yml up -d" 2>&1
 
 # -------------------------------------------------------------------------
@@ -87,15 +93,24 @@ ${SSH_CMD} "sudo docker-compose -f ${REMOTE_COMPOSE_DIR}/docker-compose.yml up -
 # This step handles existing Postgres data volumes by running the script explicitly.
 # -------------------------------------------------------------------------
 echo ""
-echo "[4/5] Creating PostgreSQL databases (idempotent)..."
+echo "[4/6] Creating PostgreSQL databases (idempotent)..."
 ${SSH_CMD} "sudo docker exec compose_postgres_1 \
     psql -U postgres -f /docker-entrypoint-initdb.d/001_create_databases.sql" 2>&1
 
 # -------------------------------------------------------------------------
-# Step 5: Verify
+# Step 5: Pre-create Kafka topics with correct partition counts
+# Without this, Redpanda auto-creates topics with 1 partition.
 # -------------------------------------------------------------------------
 echo ""
-echo "[5/5] Verifying..."
+echo "[5/6] Creating Kafka topics (idempotent)..."
+${SSH_CMD} "sudo docker cp ${REMOTE_KAFKA_DIR}/create-topics.sh compose_redpanda_1:/tmp/create-topics.sh && \
+            sudo docker exec compose_redpanda_1 bash /tmp/create-topics.sh" 2>&1
+
+# -------------------------------------------------------------------------
+# Step 6: Verify
+# -------------------------------------------------------------------------
+echo ""
+echo "[6/6] Verifying..."
 ${SSH_CMD} 'sudo docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"'
 echo ""
 ${SSH_CMD} 'sudo docker stats --no-stream --format "table {{.Name}}\t{{.MemUsage}}"'
