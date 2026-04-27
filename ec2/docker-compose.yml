@@ -18,8 +18,6 @@
 #   prometheus  — 9090   Metrics collection (arc-090)
 #   grafana     — 3000   Dashboards (arc-090)
 
-version: "3.8"
-
 x-restart: &restart_policy
   restart: unless-stopped
 

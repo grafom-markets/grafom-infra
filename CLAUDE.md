@@ -36,12 +36,12 @@ application code.
 
 | Service | Container Name | Port(s) |
 |---------|---------------|---------|
-| PostgreSQL 15 | compose_postgres_1 | 5432 |
-| Redis 7 | compose_redis_1 | 6379 |
-| Redpanda | compose_redpanda_1 | 9092, 9644 |
+| PostgreSQL 15 | compose-postgres-1 | 5432 |
+| Redis 7 | compose-redis-1 | 6379 |
+| Redpanda | compose-redpanda-1 | 9092, 9644 |
 | ClickHouse 24.8 | grafom_clickhouse | 8123, 9000 |
-| Prometheus | compose_prometheus_1 | 9090 |
-| Grafana 9.5 | compose_grafana_1 | 3000 |
+| Prometheus | compose-prometheus-1 | 9090 |
+| Grafana 9.5 | compose-grafana-1 | 3000 |
 
 ## Credentials (dev only)
 

@@ -9,7 +9,7 @@
 # What it does:
 #   1. Syncs docker-compose.yml, .env, prometheus.yml to EC2:/opt/infra/compose/
 #   2. Syncs clickhouse-init/, postgres-init/, kafka-init/, grafana/ to EC2
-#   3. Runs docker-compose up -d on EC2
+#   3. Runs docker compose up -d on EC2
 #   4. Ensures all per-service PostgreSQL databases exist
 #   5. Pre-creates Kafka topics with correct partition counts
 #   6. Verifies all containers are running
@@ -91,10 +91,10 @@ ${SSH_CMD} "sudo mv /tmp/docker-compose.yml ${REMOTE_COMPOSE_DIR}/docker-compose
 echo "  All files synced"
 
 # -------------------------------------------------------------------------
-# Step 3: docker-compose up
+# Step 3: docker compose up
 # -------------------------------------------------------------------------
 echo "[3/6] Starting services..."
-${SSH_CMD} "sudo docker-compose -f ${REMOTE_COMPOSE_DIR}/docker-compose.yml up -d" 2>&1
+${SSH_CMD} "sudo docker compose -f ${REMOTE_COMPOSE_DIR}/docker-compose.yml up -d" 2>&1
 
 # -------------------------------------------------------------------------
 # Step 4: Ensure per-service PostgreSQL databases exist
@@ -103,7 +103,7 @@ ${SSH_CMD} "sudo docker-compose -f ${REMOTE_COMPOSE_DIR}/docker-compose.yml up -
 # -------------------------------------------------------------------------
 echo ""
 echo "[4/6] Creating PostgreSQL databases (idempotent)..."
-${SSH_CMD} "sudo docker exec compose_postgres_1 \
+${SSH_CMD} "sudo docker exec compose-postgres-1 \
     psql -U postgres -f /docker-entrypoint-initdb.d/001_create_databases.sql" 2>&1
 
 # -------------------------------------------------------------------------
@@ -112,8 +112,8 @@ ${SSH_CMD} "sudo docker exec compose_postgres_1 \
 # -------------------------------------------------------------------------
 echo ""
 echo "[5/6] Creating Kafka topics (idempotent)..."
-${SSH_CMD} "sudo docker cp ${REMOTE_KAFKA_DIR}/create-topics.sh compose_redpanda_1:/tmp/create-topics.sh && \
-            sudo docker exec compose_redpanda_1 bash /tmp/create-topics.sh" 2>&1
+${SSH_CMD} "sudo docker cp ${REMOTE_KAFKA_DIR}/create-topics.sh compose-redpanda-1:/tmp/create-topics.sh && \
+            sudo docker exec compose-redpanda-1 bash /tmp/create-topics.sh" 2>&1
 
 # -------------------------------------------------------------------------
 # Step 6: Verify
