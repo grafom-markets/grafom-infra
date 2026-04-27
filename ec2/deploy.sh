@@ -8,7 +8,7 @@
 #
 # What it does:
 #   1. Syncs docker-compose.yml, .env, prometheus.yml to EC2:/opt/infra/compose/
-#   2. Syncs clickhouse-init/, postgres-init/, kafka-init/ to EC2
+#   2. Syncs clickhouse-init/, postgres-init/, kafka-init/, grafana/ to EC2
 #   3. Runs docker-compose up -d on EC2
 #   4. Ensures all per-service PostgreSQL databases exist
 #   5. Pre-creates Kafka topics with correct partition counts
@@ -24,6 +24,7 @@ REMOTE_COMPOSE_DIR="/opt/infra/compose"
 REMOTE_CLICKHOUSE_DIR="/opt/infra/clickhouse/init"
 REMOTE_POSTGRES_DIR="/opt/infra/postgres/init"
 REMOTE_KAFKA_DIR="/opt/infra/kafka/init"
+REMOTE_GRAFANA_DIR="/opt/infra/grafana"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # Parse flags
@@ -46,7 +47,8 @@ echo ""
 # Step 1: Ensure remote directories exist
 # -------------------------------------------------------------------------
 echo "[1/6] Ensuring remote directories..."
-${SSH_CMD} "sudo mkdir -p ${REMOTE_COMPOSE_DIR} ${REMOTE_CLICKHOUSE_DIR} ${REMOTE_POSTGRES_DIR} ${REMOTE_KAFKA_DIR} && \
+${SSH_CMD} "sudo mkdir -p ${REMOTE_COMPOSE_DIR} ${REMOTE_CLICKHOUSE_DIR} ${REMOTE_POSTGRES_DIR} ${REMOTE_KAFKA_DIR} \
+            ${REMOTE_GRAFANA_DIR}/provisioning/datasources ${REMOTE_GRAFANA_DIR}/provisioning/dashboards ${REMOTE_GRAFANA_DIR}/dashboards && \
             mkdir -p /tmp/ch_init /tmp/pg_init"
 
 # -------------------------------------------------------------------------
@@ -73,12 +75,19 @@ ${SCP_CMD} "${SCRIPT_DIR}/clickhouse-init/"*.sql "${EC2_USER}@${EC2_HOST}:/tmp/c
 ${SCP_CMD} "${SCRIPT_DIR}/postgres-init/"*.sql "${EC2_USER}@${EC2_HOST}:/tmp/pg_init/"
 # Kafka init scripts
 ${SCP_CMD} "${SCRIPT_DIR}/kafka-init/create-topics.sh" "${EC2_USER}@${EC2_HOST}:/tmp/create-topics.sh"
+# Grafana provisioning + dashboards
+${SCP_CMD} "${SCRIPT_DIR}/grafana/provisioning/datasources/datasources.yml" "${EC2_USER}@${EC2_HOST}:/tmp/grafana_ds.yml"
+${SCP_CMD} "${SCRIPT_DIR}/grafana/provisioning/dashboards/dashboards.yml" "${EC2_USER}@${EC2_HOST}:/tmp/grafana_dash_prov.yml"
+${SCP_CMD} "${SCRIPT_DIR}/grafana/dashboards/infra-health.json" "${EC2_USER}@${EC2_HOST}:/tmp/infra-health.json"
 ${SSH_CMD} "sudo mv /tmp/docker-compose.yml ${REMOTE_COMPOSE_DIR}/docker-compose.yml && \
             sudo mv /tmp/prometheus.yml ${REMOTE_COMPOSE_DIR}/prometheus.yml && \
             sudo mv /tmp/ch_init/*.sql ${REMOTE_CLICKHOUSE_DIR}/ && \
             sudo mv /tmp/pg_init/*.sql ${REMOTE_POSTGRES_DIR}/ && \
             sudo mv /tmp/create-topics.sh ${REMOTE_KAFKA_DIR}/create-topics.sh && \
-            sudo chmod +x ${REMOTE_KAFKA_DIR}/create-topics.sh"
+            sudo chmod +x ${REMOTE_KAFKA_DIR}/create-topics.sh && \
+            sudo mv /tmp/grafana_ds.yml ${REMOTE_GRAFANA_DIR}/provisioning/datasources/datasources.yml && \
+            sudo mv /tmp/grafana_dash_prov.yml ${REMOTE_GRAFANA_DIR}/provisioning/dashboards/dashboards.yml && \
+            sudo mv /tmp/infra-health.json ${REMOTE_GRAFANA_DIR}/dashboards/infra-health.json"
 echo "  All files synced"
 
 # -------------------------------------------------------------------------

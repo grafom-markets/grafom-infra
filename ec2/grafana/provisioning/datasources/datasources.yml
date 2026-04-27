@@ -1,0 +1,54 @@
+# Grafana data source provisioning — auto-configured on every fresh deploy.
+# References: arc-050 (three-tier data architecture), arc-090 (observability stack)
+
+apiVersion: 1
+
+datasources:
+
+  # ---------------------------------------------------------------------------
+  # Prometheus — primary metrics store (arc-090)
+  # Scrapes: prometheus, grafana, redpanda, clickhouse (see prometheus.yml)
+  # ---------------------------------------------------------------------------
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+
+  # ---------------------------------------------------------------------------
+  # ClickHouse — Tier 2 time-series and analytics (arc-180)
+  # Requires grafana-clickhouse-datasource plugin (installed via GF_INSTALL_PLUGINS)
+  # ---------------------------------------------------------------------------
+  - name: ClickHouse
+    type: grafana-clickhouse-datasource
+    access: proxy
+    editable: false
+    jsonData:
+      host: clickhouse
+      port: 9000
+      protocol: native
+      defaultDatabase: grafom
+      username: grafom
+    secureJsonData:
+      password: grafom
+
+  # ---------------------------------------------------------------------------
+  # PostgreSQL — Tier 1 OLTP (arc-050)
+  # Default DB: grafom_identity. Add per-service data sources as needed.
+  # Password injected via POSTGRES_PASSWORD env var (SEC-001: no hardcoded creds)
+  # ---------------------------------------------------------------------------
+  - name: PostgreSQL
+    type: postgres
+    access: proxy
+    url: postgres:5432
+    editable: false
+    jsonData:
+      database: grafom_identity
+      sslmode: disable
+      maxOpenConns: 5
+      maxIdleConns: 2
+      connMaxLifetime: 14400
+    user: postgres
+    secureJsonData:
+      password: $POSTGRES_PASSWORD

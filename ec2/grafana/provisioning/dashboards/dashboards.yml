@@ -1,0 +1,15 @@
+# Grafana dashboard provisioning — loads JSON dashboards from disk.
+# Dashboard JSON files are in /var/lib/grafana/dashboards (mounted volume).
+
+apiVersion: 1
+
+providers:
+  - name: default
+    orgId: 1
+    folder: ""
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

@@ -14,6 +14,7 @@ application code.
 | `ec2/clickhouse-init/` | ClickHouse DDL — 4 SQL files, 20 tables/views |
 | `ec2/postgres-init/` | PostgreSQL init — creates 13 per-service databases |
 | `ec2/kafka-init/` | Kafka topic pre-creation with partition counts (rpk) |
+| `ec2/grafana/` | Grafana provisioning (data sources, dashboards) |
 | `k8s/` | Future: EKS Kubernetes manifests |
 | `terraform/` | Future: Infrastructure as Code |
 
