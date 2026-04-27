@@ -15,6 +15,7 @@ application code.
 | `ec2/postgres-init/` | PostgreSQL init — creates 13 per-service databases |
 | `ec2/kafka-init/` | Kafka topic pre-creation with partition counts (rpk) |
 | `ec2/grafana/` | Grafana provisioning (data sources, dashboards) |
+| `docs/` | Architecture docs (infrastructure evolution, phase mapping) |
 | `k8s/` | Future: EKS Kubernetes manifests |
 | `terraform/` | Future: Infrastructure as Code |
 
