@@ -15,7 +15,11 @@ application code.
 | `ec2/postgres-init/` | PostgreSQL init — creates 13 per-service databases |
 | `ec2/kafka-init/` | Kafka topic pre-creation with partition counts (rpk) |
 | `ec2/grafana/` | Grafana provisioning (data sources, dashboards) |
-| `docs/` | Architecture docs (infrastructure evolution, phase mapping) |
+| `ec2/security-group.md` | Security group rules — canonical reference |
+| `docs/` | Architecture and operations documentation |
+| `docs/architecture.md` | Infrastructure evolution (Phase 0 EC2 → Phase 2 EKS → Phase 3 Terraform) |
+| `docs/upgrade-runbook.md` | EC2 resize, backups, version upgrades, emergency recovery |
+| `docs/environment-strategy.md` | Config per environment, secret management, database strategy |
 | `k8s/` | Future: EKS Kubernetes manifests |
 | `terraform/` | Future: Infrastructure as Code |
 
