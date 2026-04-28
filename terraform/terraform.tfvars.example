@@ -6,3 +6,10 @@ ssh_public_key_path = "~/grafom/login.pub"
 project_name        = "grafom"
 environment         = "dev"
 allowed_ips         = ["0.0.0.0/0"]
+
+# GCP always-free — uncomment to switch
+# cloud_provider       = "gcp"
+# region               = "us-central1"
+# instance_type        = "e2-micro"
+# gcp_project_id       = "your-gcp-project-id"
+# gcp_credentials_file = "~/grafom/gcp-credentials.json"
