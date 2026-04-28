@@ -32,7 +32,7 @@ data "aws_ami" "ubuntu" {
 
 resource "aws_key_pair" "grafom" {
   key_name   = "${var.project_name}-${var.environment}"
-  public_key = file(var.ssh_public_key_path)
+  public_key = file(pathexpand(var.ssh_public_key_path))
 }
 
 # ---------------------------------------------------------------------------
