@@ -1,6 +1,6 @@
 output "instance_ip" {
-  description = "Public IP of the EC2 instance"
-  value       = ""
+  description = "Elastic IP of the EC2 instance"
+  value       = aws_eip.grafom.public_ip
 }
 
 output "ssh_user" {
@@ -10,10 +10,10 @@ output "ssh_user" {
 
 output "ssh_connection" {
   description = "SSH command to connect"
-  value       = ""
+  value       = "ssh -i ${var.ssh_key_path} ubuntu@${aws_eip.grafom.public_ip}"
 }
 
 output "instance_id" {
   description = "EC2 instance ID"
-  value       = ""
+  value       = aws_instance.grafom.id
 }

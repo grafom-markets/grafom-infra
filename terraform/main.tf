@@ -1,4 +1,20 @@
 # ---------------------------------------------------------------------------
+# Providers — configured at root, inherited by child modules
+# ---------------------------------------------------------------------------
+
+provider "aws" {
+  region = var.region
+
+  default_tags {
+    tags = {
+      Project     = var.project_name
+      Environment = var.environment
+      ManagedBy   = "opentofu"
+    }
+  }
+}
+
+# ---------------------------------------------------------------------------
 # Cloud selector — exactly one module is active at a time
 # ---------------------------------------------------------------------------
 
