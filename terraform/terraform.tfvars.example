@@ -20,3 +20,15 @@ allowed_ips         = ["0.0.0.0/0"]
 # instance_type         = "Standard_B1s"
 # azure_subscription_id = "your-subscription-id"
 # azure_resource_group  = "grafom-dev-rg"
+
+# Oracle always-free — BEST FREE TIER (4 CPU, 24 GB RAM, no expiry)
+# cloud_provider          = "oracle"
+# region                  = "us-ashburn-1"
+# instance_type           = "VM.Standard.A1.Flex"
+# oracle_tenancy_ocid     = "ocid1.tenancy.oc1..xxx"
+# oracle_user_ocid        = "ocid1.user.oc1..xxx"
+# oracle_fingerprint      = "xx:xx:xx:..."
+# oracle_private_key_path = "~/grafom/oracle-api-key.pem"
+# oracle_compartment_id   = "ocid1.compartment.oc1..xxx"
+# oracle_ocpus            = 4
+# oracle_memory_gb        = 24

@@ -87,12 +87,19 @@ module "oracle" {
   source = "./modules/oracle"
   count  = local.cloud == "oracle" ? 1 : 0
 
-  region              = var.region
-  instance_type       = var.instance_type
-  ssh_key_path        = var.ssh_key_path
-  ssh_public_key_path = var.ssh_public_key_path
-  project_name        = var.project_name
-  environment         = var.environment
-  allowed_ips         = var.allowed_ips
-  open_ports          = var.open_ports
+  region                  = var.region
+  instance_type           = var.instance_type
+  ssh_key_path            = var.ssh_key_path
+  ssh_public_key_path     = var.ssh_public_key_path
+  project_name            = var.project_name
+  environment             = var.environment
+  allowed_ips             = var.allowed_ips
+  open_ports              = var.open_ports
+  oracle_tenancy_ocid     = var.oracle_tenancy_ocid
+  oracle_user_ocid        = var.oracle_user_ocid
+  oracle_fingerprint      = var.oracle_fingerprint
+  oracle_private_key_path = var.oracle_private_key_path
+  oracle_compartment_id   = var.oracle_compartment_id
+  oracle_ocpus            = var.oracle_ocpus
+  oracle_memory_gb        = var.oracle_memory_gb
 }
