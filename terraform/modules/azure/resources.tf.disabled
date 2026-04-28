@@ -1,0 +1,143 @@
+terraform {
+  required_providers {
+    azurerm = {
+      source  = "hashicorp/azurerm"
+      version = "~> 4.0"
+    }
+  }
+}
+
+# Credentials via Azure CLI or environment variables:
+#   az login
+#   export ARM_SUBSCRIPTION_ID="your-subscription-id"
+
+# ---------------------------------------------------------------------------
+# Resource group
+# ---------------------------------------------------------------------------
+
+resource "azurerm_resource_group" "grafom" {
+  name     = var.azure_resource_group
+  location = var.azure_location
+
+  tags = {
+    Project     = var.project_name
+    Environment = var.environment
+    ManagedBy   = "opentofu"
+  }
+}
+
+# ---------------------------------------------------------------------------
+# Networking — VNet, subnet, public IP, NSG, NIC
+# ---------------------------------------------------------------------------
+
+resource "azurerm_virtual_network" "grafom" {
+  name                = "${var.project_name}-${var.environment}-vnet"
+  resource_group_name = azurerm_resource_group.grafom.name
+  location            = azurerm_resource_group.grafom.location
+  address_space       = ["10.0.0.0/16"]
+}
+
+resource "azurerm_subnet" "grafom" {
+  name                 = "${var.project_name}-${var.environment}-subnet"
+  resource_group_name  = azurerm_resource_group.grafom.name
+  virtual_network_name = azurerm_virtual_network.grafom.name
+  address_prefixes     = ["10.0.1.0/24"]
+}
+
+resource "azurerm_public_ip" "grafom" {
+  name                = "${var.project_name}-${var.environment}-pip"
+  resource_group_name = azurerm_resource_group.grafom.name
+  location            = azurerm_resource_group.grafom.location
+  allocation_method   = "Static"
+  sku                 = "Standard"
+
+  tags = {
+    Project     = var.project_name
+    Environment = var.environment
+    ManagedBy   = "opentofu"
+  }
+}
+
+resource "azurerm_network_security_group" "grafom" {
+  name                = "${var.project_name}-${var.environment}-nsg"
+  resource_group_name = azurerm_resource_group.grafom.name
+  location            = azurerm_resource_group.grafom.location
+
+  dynamic "security_rule" {
+    for_each = { for i, port in var.open_ports : port => i }
+    content {
+      name                       = "allow-${security_rule.key}"
+      priority                   = 100 + security_rule.value
+      direction                  = "Inbound"
+      access                     = "Allow"
+      protocol                   = "Tcp"
+      source_port_range          = "*"
+      destination_port_range     = tostring(security_rule.key)
+      source_address_prefixes    = var.allowed_ips
+      destination_address_prefix = "*"
+    }
+  }
+
+  tags = {
+    Project     = var.project_name
+    Environment = var.environment
+    ManagedBy   = "opentofu"
+  }
+}
+
+resource "azurerm_network_interface" "grafom" {
+  name                = "${var.project_name}-${var.environment}-nic"
+  resource_group_name = azurerm_resource_group.grafom.name
+  location            = azurerm_resource_group.grafom.location
+
+  ip_configuration {
+    name                          = "internal"
+    subnet_id                     = azurerm_subnet.grafom.id
+    private_ip_address_allocation = "Dynamic"
+    public_ip_address_id          = azurerm_public_ip.grafom.id
+  }
+}
+
+resource "azurerm_network_interface_security_group_association" "grafom" {
+  network_interface_id      = azurerm_network_interface.grafom.id
+  network_security_group_id = azurerm_network_security_group.grafom.id
+}
+
+# ---------------------------------------------------------------------------
+# Linux VM — Standard_B1s, Ubuntu 22.04 LTS, 64 GB Standard SSD
+# ---------------------------------------------------------------------------
+
+resource "azurerm_linux_virtual_machine" "grafom" {
+  name                = "${var.project_name}-${var.environment}-vm"
+  resource_group_name = azurerm_resource_group.grafom.name
+  location            = azurerm_resource_group.grafom.location
+  size                = var.instance_type
+  admin_username      = "ubuntu"
+  network_interface_ids = [
+    azurerm_network_interface.grafom.id,
+  ]
+
+  admin_ssh_key {
+    username   = "ubuntu"
+    public_key = file(pathexpand(var.ssh_public_key_path))
+  }
+
+  os_disk {
+    caching              = "ReadWrite"
+    storage_account_type = "Standard_LRS"
+    disk_size_gb         = 64
+  }
+
+  source_image_reference {
+    publisher = "Canonical"
+    offer     = "0001-com-ubuntu-server-jammy"
+    sku       = "22_04-lts-gen2"
+    version   = "latest"
+  }
+
+  tags = {
+    Project     = var.project_name
+    Environment = var.environment
+    ManagedBy   = "opentofu"
+  }
+}

@@ -61,3 +61,25 @@ variable "open_ports" {
   type        = list(number)
   default     = [22, 3000, 5432, 6379, 8123, 9000, 9090, 9092, 9644]
 }
+
+# ---------------------------------------------------------------------------
+# Azure-specific variables
+# ---------------------------------------------------------------------------
+
+variable "azure_subscription_id" {
+  description = "Azure subscription ID (required when cloud_provider = azure)"
+  type        = string
+  default     = ""
+}
+
+variable "azure_resource_group" {
+  description = "Azure resource group name"
+  type        = string
+  default     = "grafom-dev-rg"
+}
+
+variable "azure_location" {
+  description = "Azure region for resources"
+  type        = string
+  default     = "northeurope"
+}

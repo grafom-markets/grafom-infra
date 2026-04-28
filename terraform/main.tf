@@ -66,14 +66,17 @@ module "azure" {
   source = "./modules/azure"
   count  = local.cloud == "azure" ? 1 : 0
 
-  region              = var.region
-  instance_type       = var.instance_type
-  ssh_key_path        = var.ssh_key_path
-  ssh_public_key_path = var.ssh_public_key_path
-  project_name        = var.project_name
-  environment         = var.environment
-  allowed_ips         = var.allowed_ips
-  open_ports          = var.open_ports
+  region                = var.region
+  instance_type         = var.instance_type
+  ssh_key_path          = var.ssh_key_path
+  ssh_public_key_path   = var.ssh_public_key_path
+  project_name          = var.project_name
+  environment           = var.environment
+  allowed_ips           = var.allowed_ips
+  open_ports            = var.open_ports
+  azure_subscription_id = var.azure_subscription_id
+  azure_resource_group  = var.azure_resource_group
+  azure_location        = var.azure_location
 }
 
 # ---------------------------------------------------------------------------
