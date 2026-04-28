@@ -18,7 +18,7 @@ set -euo pipefail
 
 # Defaults
 SSH_KEY="${HOME}/grafom/login.pem"
-EC2_HOST="13.51.159.243"
+EC2_HOST="13.53.101.3"
 EC2_USER="ubuntu"
 REMOTE_COMPOSE_DIR="/opt/infra/compose"
 REMOTE_CLICKHOUSE_DIR="/opt/infra/clickhouse/init"

@@ -25,12 +25,13 @@ application code.
 
 ## EC2 Instance
 
-- **IP:** 13.51.159.243
+- **IP:** 13.53.101.3 (Elastic IP, managed by OpenTofu)
+- **Instance ID:** i-0d789148a135e2d7c
 - **Type:** t3.micro (1 GB RAM)
 - **Region:** eu-north-1 (Stockholm)
-- **Security Group:** sg-02ab16897e5744c5b
-- **SSH:** `ssh -i ~/grafom/login.pem ubuntu@13.51.159.243`
-- **Docker commands require `sudo`**
+- **Security Group:** sg-033103e0792cd6be3 (grafom-dev-sg, managed by OpenTofu)
+- **SSH:** `ssh -i ~/grafom/login.pem ubuntu@13.53.101.3`
+- **Managed by:** OpenTofu (`make plan CLOUD=aws` / `make apply CLOUD=aws`)
 
 ## Services Running
 

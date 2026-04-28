@@ -1,8 +1,8 @@
 # AWS Security Group — Canonical Reference
 
-**Security Group ID:** `sg-02ab16897e5744c5b` (launch-wizard-1)
+**Security Group ID:** `sg-033103e0792cd6be3` (grafom-dev-sg, managed by OpenTofu)
 **Region:** eu-north-1 (Stockholm)
-**Instance:** 13.51.159.243 (t3.micro)
+**Instance:** 13.53.101.3 (t3.micro, i-0d789148a135e2d7c)
 
 This file is the single source of truth for inbound rules on the shared EC2 dev/test
 instance. All changes to the security group MUST be reflected here.
