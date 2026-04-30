@@ -1,9 +1,6 @@
-# Placeholder outputs — replaced by resource references when activated.
-# See resources.tf.disabled for the real output values.
-
 output "instance_ip" {
   description = "Reserved public IP of the OCI instance"
-  value       = ""
+  value       = oci_core_public_ip.grafom.ip_address
 }
 
 output "ssh_user" {
@@ -13,10 +10,10 @@ output "ssh_user" {
 
 output "ssh_connection" {
   description = "SSH command to connect"
-  value       = ""
+  value       = "ssh -i ${var.ssh_key_path} ubuntu@${oci_core_public_ip.grafom.ip_address}"
 }
 
 output "instance_id" {
   description = "OCI instance OCID"
-  value       = ""
+  value       = oci_core_instance.grafom.id
 }

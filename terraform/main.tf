@@ -3,7 +3,11 @@
 # ---------------------------------------------------------------------------
 
 provider "aws" {
-  region = var.region
+  region = var.cloud_provider == "aws" ? var.region : "us-east-1"
+
+  skip_credentials_validation = var.cloud_provider != "aws"
+  skip_requesting_account_id  = var.cloud_provider != "aws"
+  skip_region_validation      = var.cloud_provider != "aws"
 
   default_tags {
     tags = {
@@ -12,6 +16,20 @@ provider "aws" {
       ManagedBy   = "opentofu"
     }
   }
+}
+
+provider "google" {
+  project     = var.gcp_project_id
+  region      = var.cloud_provider == "gcp" ? var.region : "us-central1"
+  credentials = var.gcp_credentials_file != "" ? file(pathexpand(var.gcp_credentials_file)) : null
+}
+
+provider "oci" {
+  tenancy_ocid     = var.oracle_tenancy_ocid
+  user_ocid        = var.oracle_user_ocid
+  fingerprint      = var.oracle_fingerprint
+  private_key_path = pathexpand(var.oracle_private_key_path)
+  region           = var.region
 }
 
 # ---------------------------------------------------------------------------
@@ -48,14 +66,16 @@ module "gcp" {
   source = "./modules/gcp"
   count  = local.cloud == "gcp" ? 1 : 0
 
-  region              = var.region
-  instance_type       = var.instance_type
-  ssh_key_path        = var.ssh_key_path
-  ssh_public_key_path = var.ssh_public_key_path
-  project_name        = var.project_name
-  environment         = var.environment
-  allowed_ips         = var.allowed_ips
-  open_ports          = var.open_ports
+  region               = var.region
+  instance_type        = var.instance_type
+  ssh_key_path         = var.ssh_key_path
+  ssh_public_key_path  = var.ssh_public_key_path
+  project_name         = var.project_name
+  environment          = var.environment
+  allowed_ips          = var.allowed_ips
+  open_ports           = var.open_ports
+  gcp_project_id       = var.gcp_project_id
+  gcp_credentials_file = var.gcp_credentials_file
 }
 
 # ---------------------------------------------------------------------------

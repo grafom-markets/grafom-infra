@@ -1,9 +1,6 @@
-# Placeholder outputs — replaced by resource references when activated.
-# See resources.tf.disabled for the real output values.
-
 output "instance_ip" {
   description = "Static IP of the GCE instance"
-  value       = ""
+  value       = google_compute_address.grafom.address
 }
 
 output "ssh_user" {
@@ -13,10 +10,10 @@ output "ssh_user" {
 
 output "ssh_connection" {
   description = "SSH command to connect"
-  value       = ""
+  value       = "ssh -i ${var.ssh_key_path} ubuntu@${google_compute_address.grafom.address}"
 }
 
 output "instance_id" {
   description = "GCE instance ID"
-  value       = ""
+  value       = google_compute_instance.grafom.instance_id
 }

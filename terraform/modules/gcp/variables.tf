@@ -29,3 +29,11 @@ variable "allowed_ips" {
 variable "open_ports" {
   type = list(number)
 }
+
+variable "gcp_project_id" {
+  type = string
+}
+
+variable "gcp_credentials_file" {
+  type = string
+}

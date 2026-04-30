@@ -21,17 +21,23 @@ application code.
 | `docs/upgrade-runbook.md` | EC2 resize, backups, version upgrades, emergency recovery |
 | `docs/environment-strategy.md` | Config per environment, secret management, database strategy |
 | `k8s/` | Future: EKS Kubernetes manifests |
-| `terraform/` | Future: Infrastructure as Code |
+| `terraform/` | OpenTofu IaC — cloud-agnostic (AWS/GCP/Azure/Oracle) |
 
-## EC2 Instance
+## Infrastructure Management
 
-- **IP:** 13.53.101.3 (Elastic IP, managed by OpenTofu)
-- **Instance ID:** i-0d789148a135e2d7c
-- **Type:** t3.micro (1 GB RAM)
-- **Region:** eu-north-1 (Stockholm)
-- **Security Group:** sg-033103e0792cd6be3 (grafom-dev-sg, managed by OpenTofu)
-- **SSH:** `ssh -i ~/grafom/login.pem ubuntu@13.53.101.3`
-- **Managed by:** OpenTofu (`make plan CLOUD=aws` / `make apply CLOUD=aws`)
+Cloud resources managed by OpenTofu in `terraform/`.
+Switch clouds: `make apply CLOUD=<aws|gcp|azure|oracle>`
+
+| Role | Cloud | Region | Instance | RAM | Free Tier | IP | SSH |
+|------|-------|--------|----------|-----|-----------|-----|-----|
+| **Primary** | Oracle | ap-mumbai-1 | VM.Standard.A1.Flex (4 OCPU, ARM64) | 24 GB | Always-free | 80.225.199.245 | `ssh grafom-oracle` |
+| Secondary | AWS | eu-north-1 | t3.micro | 1 GB + 2 GB swap | 12 months | 13.63.244.213 | `ssh -i ~/.ssh/grafom_infra ubuntu@13.63.244.213` |
+| Tertiary | GCP | us-central1 | e2-micro (monitoring only) | 1 GB + 2 GB swap | Always-free | 34.27.120.191 | `ssh -i ~/.ssh/grafom_infra ubuntu@34.27.120.191` |
+
+**OpenTofu workspaces:** Each cloud has its own workspace (`tofu workspace select aws|oracle|gcp`).
+- `aws` workspace: EC2 instance + SG + EIP + key pair
+- `oracle` workspace: VCN + subnet + instance + reserved IP
+- `gcp` workspace: static IP + firewall + e2-micro instance
 
 ## Services Running
 
@@ -56,7 +62,14 @@ application code.
 ## Deploy
 
 ```bash
-./ec2/deploy.sh
+# Oracle (primary)
+./ec2/deploy.sh -k ~/.ssh/grafom_infra -h 80.225.199.245
+
+# AWS (secondary — full stack)
+./ec2/deploy.sh -k ~/.ssh/grafom_infra -h 13.63.244.213
+
+# GCP (tertiary — Prometheus + Grafana only)
+# Full deploy.sh then stop heavy containers
 ```
 
 ## Key Constraints

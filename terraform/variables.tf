@@ -63,6 +63,22 @@ variable "open_ports" {
 }
 
 # ---------------------------------------------------------------------------
+# GCP-specific variables
+# ---------------------------------------------------------------------------
+
+variable "gcp_project_id" {
+  description = "GCP project ID (required when cloud_provider = gcp)"
+  type        = string
+  default     = ""
+}
+
+variable "gcp_credentials_file" {
+  description = "Path to GCP service account JSON key"
+  type        = string
+  default     = ""
+}
+
+# ---------------------------------------------------------------------------
 # Azure-specific variables
 # ---------------------------------------------------------------------------
 
