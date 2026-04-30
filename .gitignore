@@ -15,3 +15,10 @@ Thumbs.db
 # SSH keys (should never be committed)
 *.pem
 *.key
+
+# Terraform state and plans (may contain credentials)
+*.tfstate
+*.tfstate.backup
+*.tfstate.*.backup
+tfplan
+.terraform/
