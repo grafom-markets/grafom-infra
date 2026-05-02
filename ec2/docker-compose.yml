@@ -1,22 +1,25 @@
-# Grafom shared development infrastructure — EC2 (13.51.159.243)
+# Grafom shared development infrastructure — Oracle Cloud A1 (80.225.199.245)
 #
-# This is the canonical compose file for the shared EC2 dev/test instance.
+# This is the canonical compose file for the shared Oracle A1 dev/test instance.
 # All services in the Grafom ecosystem connect to these backends.
+# Reference: arc-190 (portable dev/test infra — Oracle Always Free A1, 24 GB RAM)
 #
 # Deployment:
-#   ./deploy.sh                     # sync and restart on EC2
+#   ./deploy.sh                     # sync and restart on Oracle A1
 #
-# Manual (on EC2):
+# Manual (on Oracle A1):
 #   cd /opt/infra/compose
-#   docker-compose up -d
+#   docker compose up -d
 #
 # Services:
-#   postgres    — 5432   Tier 1 OLTP (arc-050)
-#   redis       — 6379   Tier 3 cache (arc-050)
-#   redpanda    — 9092   Event streaming / Kafka-compatible (arc-020)
-#   clickhouse  — 8123, 9000   Tier 2 time-series (arc-180)
-#   prometheus  — 9090   Metrics collection (arc-090)
-#   grafana     — 3000   Dashboards (arc-090)
+#   postgres          — 5432        Tier 1 OLTP (arc-050)
+#   redis             — 6379        Tier 3 cache (arc-050)
+#   redpanda          — 9092        Event streaming / Kafka-compatible (arc-020)
+#   redpanda-console  — 8080        Kafka topic browser UI
+#   clickhouse        — 8123, 9000  Tier 2 time-series (arc-180); metrics on 9363
+#   otel-collector    — 4317, 4318  OTLP receiver; Prometheus export on 8889 (arc-090)
+#   prometheus        — 9090        Metrics collection (arc-090)
+#   grafana           — 3000        Dashboards (arc-090)
 
 x-restart: &restart_policy
   restart: unless-stopped
@@ -109,6 +112,7 @@ services:
       - clickhouse_data:/var/lib/clickhouse
       - clickhouse_logs:/var/log/clickhouse-server
       - /opt/infra/clickhouse/init:/docker-entrypoint-initdb.d
+      - /opt/infra/clickhouse/config/prometheus.xml:/etc/clickhouse-server/config.d/prometheus.xml:ro
     networks:
       - infra_net
     environment:
@@ -128,6 +132,57 @@ services:
     ports:
       - "8123:8123"
       - "9000:9000"
+      - "9363:9363"
+    <<: *restart_policy
+
+  # -------------------------------------------------------------------------
+  # OpenTelemetry Collector — OTLP receiver for all service traces + metrics
+  # Services connect to otel-collector:4317 (gRPC) or :4318 (HTTP).
+  # Exports service metrics to Prometheus at :8889.
+  # -------------------------------------------------------------------------
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.100.0
+    volumes:
+      - /opt/infra/otel/otel-collector.yml:/etc/otel-collector.yml:ro
+    command: ["--config=/etc/otel-collector.yml"]
+    networks:
+      - infra_net
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+      - "8889:8889"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:13133/health/status || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    <<: *restart_policy
+
+  # -------------------------------------------------------------------------
+  # Redpanda Console — Kafka topic browser UI (port 8080)
+  # Useful for inspecting topics, consumer group lag, and message contents
+  # during flow test development.
+  # -------------------------------------------------------------------------
+  redpanda-console:
+    image: docker.redpanda.com/redpandadata/console:latest
+    volumes:
+      - /opt/infra/redpanda-console/config.yml:/tmp/config.yml:ro
+    environment:
+      CONFIG_FILEPATH: /tmp/config.yml
+    networks:
+      - infra_net
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/api/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
     <<: *restart_policy
 
   # -------------------------------------------------------------------------

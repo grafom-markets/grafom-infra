@@ -1,0 +1,51 @@
+# OpenTelemetry Collector — dev/test configuration
+#
+# Receives OTLP traces + metrics from all Grafom services.
+# Exports metrics to Prometheus (port 8889); traces logged to stdout (dev only).
+# When Grafana Tempo is added, replace the debug exporter with a Tempo exporter.
+#
+# Services connect to: otel-collector:4317 (gRPC) or otel-collector:4318 (HTTP)
+# References: arc-090 (observability), std-090 (structured logging + tracing)
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch:
+    timeout: 5s
+    send_batch_size: 1000
+
+exporters:
+  # Prometheus scrapes this endpoint for service metrics
+  prometheus:
+    endpoint: "0.0.0.0:8889"
+    namespace: grafom
+
+  # Traces logged to stdout — replace with Tempo when distributed tracing is needed
+  debug:
+    verbosity: basic
+
+service:
+  extensions: [health_check]
+  pipelines:
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [prometheus]
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [debug]
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [debug]

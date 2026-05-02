@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# deploy.sh — Sync and deploy shared infrastructure to EC2
+# deploy.sh — Sync and deploy shared infrastructure to Oracle Cloud A1
 #
 # Usage:
 #   ./ec2/deploy.sh                          # uses default key + host
@@ -7,24 +7,30 @@
 #   ./ec2/deploy.sh -h 1.2.3.4              # custom host
 #
 # What it does:
-#   1. Syncs docker-compose.yml, .env, prometheus.yml to EC2:/opt/infra/compose/
-#   2. Syncs clickhouse-init/, postgres-init/, kafka-init/, grafana/ to EC2
-#   3. Runs docker compose up -d on EC2
+#   1. Syncs docker-compose.yml, .env, prometheus.yml to Oracle A1:/opt/infra/compose/
+#   2. Syncs clickhouse-init/, clickhouse-config/, postgres-init/, kafka-init/, grafana/,
+#      otel-config/, redpanda-console/ to Oracle A1
+#   3. Runs docker compose up -d on Oracle A1
 #   4. Ensures all per-service PostgreSQL databases exist
 #   5. Pre-creates Kafka topics with correct partition counts
-#   6. Verifies all containers are running
+#   6. Verifies all 8 containers are running
+#
+# Target: Oracle Cloud A1 (arc-190) — 80.225.199.245, 24 GB RAM, Always Free
 
 set -euo pipefail
 
 # Defaults
-SSH_KEY="${HOME}/grafom/login.pem"
-EC2_HOST="13.53.101.3"
+SSH_KEY="${HOME}/grafom/oracle-api-key.pem"
+EC2_HOST="80.225.199.245"
 EC2_USER="ubuntu"
 REMOTE_COMPOSE_DIR="/opt/infra/compose"
 REMOTE_CLICKHOUSE_DIR="/opt/infra/clickhouse/init"
+REMOTE_CLICKHOUSE_CFG_DIR="/opt/infra/clickhouse/config"
 REMOTE_POSTGRES_DIR="/opt/infra/postgres/init"
 REMOTE_KAFKA_DIR="/opt/infra/kafka/init"
 REMOTE_GRAFANA_DIR="/opt/infra/grafana"
+REMOTE_OTEL_DIR="/opt/infra/otel"
+REMOTE_CONSOLE_DIR="/opt/infra/redpanda-console"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # Parse flags
@@ -47,12 +53,18 @@ echo ""
 # Step 1: Ensure remote directories exist
 # -------------------------------------------------------------------------
 echo "[1/6] Ensuring remote directories..."
-${SSH_CMD} "sudo mkdir -p ${REMOTE_COMPOSE_DIR} ${REMOTE_CLICKHOUSE_DIR} ${REMOTE_POSTGRES_DIR} ${REMOTE_KAFKA_DIR} \
-            ${REMOTE_GRAFANA_DIR}/provisioning/datasources ${REMOTE_GRAFANA_DIR}/provisioning/dashboards ${REMOTE_GRAFANA_DIR}/dashboards && \
+${SSH_CMD} "sudo mkdir -p ${REMOTE_COMPOSE_DIR} \
+            ${REMOTE_CLICKHOUSE_DIR} ${REMOTE_CLICKHOUSE_CFG_DIR} \
+            ${REMOTE_POSTGRES_DIR} ${REMOTE_KAFKA_DIR} \
+            ${REMOTE_GRAFANA_DIR}/provisioning/datasources \
+            ${REMOTE_GRAFANA_DIR}/provisioning/dashboards \
+            ${REMOTE_GRAFANA_DIR}/dashboards \
+            ${REMOTE_OTEL_DIR} \
+            ${REMOTE_CONSOLE_DIR} && \
             mkdir -p /tmp/ch_init /tmp/pg_init"
 
 # -------------------------------------------------------------------------
-# Step 2: Sync files to EC2
+# Step 2: Sync files to Oracle A1
 # -------------------------------------------------------------------------
 echo "[2/6] Syncing files..."
 
@@ -66,11 +78,12 @@ if [ -f "${SCRIPT_DIR}/.env" ]; then
     ${SSH_CMD} "sudo mv /tmp/infra.env ${REMOTE_COMPOSE_DIR}/.env"
     echo "  .env synced"
 else
-    echo "  .env not found locally — skipping (using existing on EC2)"
+    echo "  .env not found locally — skipping (using existing on Oracle A1)"
 fi
 
-# ClickHouse init SQL
+# ClickHouse init SQL + Prometheus metrics config
 ${SCP_CMD} "${SCRIPT_DIR}/clickhouse-init/"*.sql "${EC2_USER}@${EC2_HOST}:/tmp/ch_init/"
+${SCP_CMD} "${SCRIPT_DIR}/clickhouse-config/prometheus.xml" "${EC2_USER}@${EC2_HOST}:/tmp/ch_prometheus.xml"
 # PostgreSQL init SQL
 ${SCP_CMD} "${SCRIPT_DIR}/postgres-init/"*.sql "${EC2_USER}@${EC2_HOST}:/tmp/pg_init/"
 # Kafka init scripts
@@ -79,15 +92,23 @@ ${SCP_CMD} "${SCRIPT_DIR}/kafka-init/create-topics.sh" "${EC2_USER}@${EC2_HOST}:
 ${SCP_CMD} "${SCRIPT_DIR}/grafana/provisioning/datasources/datasources.yml" "${EC2_USER}@${EC2_HOST}:/tmp/grafana_ds.yml"
 ${SCP_CMD} "${SCRIPT_DIR}/grafana/provisioning/dashboards/dashboards.yml" "${EC2_USER}@${EC2_HOST}:/tmp/grafana_dash_prov.yml"
 ${SCP_CMD} "${SCRIPT_DIR}/grafana/dashboards/infra-health.json" "${EC2_USER}@${EC2_HOST}:/tmp/infra-health.json"
+# OTEL Collector config
+${SCP_CMD} "${SCRIPT_DIR}/otel-config/otel-collector.yml" "${EC2_USER}@${EC2_HOST}:/tmp/otel-collector.yml"
+# Redpanda Console config
+${SCP_CMD} "${SCRIPT_DIR}/redpanda-console/config.yml" "${EC2_USER}@${EC2_HOST}:/tmp/console-config.yml"
+
 ${SSH_CMD} "sudo mv /tmp/docker-compose.yml ${REMOTE_COMPOSE_DIR}/docker-compose.yml && \
             sudo mv /tmp/prometheus.yml ${REMOTE_COMPOSE_DIR}/prometheus.yml && \
             sudo mv /tmp/ch_init/*.sql ${REMOTE_CLICKHOUSE_DIR}/ && \
+            sudo mv /tmp/ch_prometheus.xml ${REMOTE_CLICKHOUSE_CFG_DIR}/prometheus.xml && \
             sudo mv /tmp/pg_init/*.sql ${REMOTE_POSTGRES_DIR}/ && \
             sudo mv /tmp/create-topics.sh ${REMOTE_KAFKA_DIR}/create-topics.sh && \
             sudo chmod +x ${REMOTE_KAFKA_DIR}/create-topics.sh && \
             sudo mv /tmp/grafana_ds.yml ${REMOTE_GRAFANA_DIR}/provisioning/datasources/datasources.yml && \
             sudo mv /tmp/grafana_dash_prov.yml ${REMOTE_GRAFANA_DIR}/provisioning/dashboards/dashboards.yml && \
-            sudo mv /tmp/infra-health.json ${REMOTE_GRAFANA_DIR}/dashboards/infra-health.json"
+            sudo mv /tmp/infra-health.json ${REMOTE_GRAFANA_DIR}/dashboards/infra-health.json && \
+            sudo mv /tmp/otel-collector.yml ${REMOTE_OTEL_DIR}/otel-collector.yml && \
+            sudo mv /tmp/console-config.yml ${REMOTE_CONSOLE_DIR}/config.yml"
 echo "  All files synced"
 
 # -------------------------------------------------------------------------
@@ -124,9 +145,15 @@ ${SSH_CMD} 'sudo docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"'
 echo ""
 ${SSH_CMD} 'sudo docker stats --no-stream --format "table {{.Name}}\t{{.MemUsage}}"'
 echo ""
-echo "=== Deploy complete ==="
-echo "  Compose:    http://${EC2_HOST}:3000 (Grafana)"
-echo "  ClickHouse: http://${EC2_HOST}:8123 (HTTP)"
-echo "  Kafka:      ${EC2_HOST}:9092"
-echo "  PostgreSQL:  ${EC2_HOST}:5432"
-echo "  Redis:       ${EC2_HOST}:6379"
+echo "=== Deploy complete === (Oracle Cloud A1 — 80.225.199.245)"
+echo "  Grafana:          http://${EC2_HOST}:3000"
+echo "  Redpanda Console: http://${EC2_HOST}:8080"
+echo "  Prometheus:       http://${EC2_HOST}:9090"
+echo "  ClickHouse HTTP:  http://${EC2_HOST}:8123"
+echo "  OTLP gRPC:        ${EC2_HOST}:4317"
+echo "  Kafka:            ${EC2_HOST}:9092"
+echo "  PostgreSQL:       ${EC2_HOST}:5432"
+echo "  Redis:            ${EC2_HOST}:6379"
+echo ""
+echo "Expected containers: postgres, redis, redpanda, redpanda-console,"
+echo "  grafom_clickhouse, otel-collector, prometheus, grafana (8 total)"

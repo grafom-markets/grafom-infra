@@ -1,0 +1,13 @@
+<!-- Enable Prometheus metrics endpoint on ClickHouse.
+     Exposes /metrics on port 9363 — scraped by Prometheus (see prometheus.yml).
+     Reference: arc-180 (ClickHouse time-series), arc-090 (observability) -->
+<clickhouse>
+    <prometheus>
+        <endpoint>/metrics</endpoint>
+        <port>9363</port>
+        <metrics>true</metrics>
+        <events>true</events>
+        <asynchronous_metrics>true</asynchronous_metrics>
+        <status_info>true</status_info>
+    </prometheus>
+</clickhouse>

@@ -1,21 +1,33 @@
 global:
   scrape_interval: 15s
+  evaluation_interval: 15s
 
 scrape_configs:
+  # Prometheus self-monitoring
   - job_name: 'prometheus'
     static_configs:
       - targets: ['localhost:9090']
 
+  # Grafana metrics
   - job_name: 'grafana'
     static_configs:
       - targets: ['grafana:3000']
 
+  # Redpanda metrics (internal admin port 9644)
   - job_name: 'redpanda'
     metrics_path: /metrics
     static_configs:
       - targets: ['redpanda:9644']
 
+  # ClickHouse metrics — requires prometheus.xml config (ec2/clickhouse-config/prometheus.xml)
+  # Exposes /metrics on dedicated port 9363 (not 8123 which is the HTTP query interface)
   - job_name: 'clickhouse'
     metrics_path: /metrics
     static_configs:
-      - targets: ['clickhouse:8123']
+      - targets: ['clickhouse:9363']
+
+  # OTEL Collector — exports service metrics received via OTLP
+  # Services push traces + metrics to otel-collector:4317; Prometheus scrapes here
+  - job_name: 'otel-collector'
+    static_configs:
+      - targets: ['otel-collector:8889']

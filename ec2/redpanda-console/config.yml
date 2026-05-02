@@ -1,0 +1,11 @@
+# Redpanda Console configuration
+# UI accessible at http://<host>:8080
+# References: arc-020 (event-driven Kafka), std-070 (topic naming)
+
+kafka:
+  brokers:
+    - redpanda:9092
+  schemaRegistry:
+    enabled: false
+
+# No auth for dev — restrict port 8080 to your IP in OCI security rules
