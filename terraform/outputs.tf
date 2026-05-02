@@ -37,3 +37,8 @@ output "instance_id" {
     module.oracle[0].instance_id
   )
 }
+
+output "ssh_key_path" {
+  description = "Path to SSH private key for VM login"
+  value       = pathexpand(var.ssh_key_path)
+}

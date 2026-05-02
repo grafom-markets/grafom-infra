@@ -1,28 +1,61 @@
 #!/usr/bin/env bash
-# deploy.sh — Sync and deploy shared infrastructure to Oracle Cloud A1
+# deploy.sh — Sync and deploy shared infrastructure (cloud-agnostic, arc-190)
+#
+# IMPORTANT: This script is a TRANSITIONAL tool. The target state (arc-190) is:
+#   make deploy CLOUD=oracle   →  OpenTofu provisions + Ansible deploys
+#
+# Until Ansible playbooks are built (bg-020 Phase 2), this script bridges the gap.
+# Host/key/user are read from OpenTofu outputs — NOT hardcoded — so switching clouds
+# only requires changing terraform.tfvars, running `tofu apply`, then `./deploy.sh`.
 #
 # Usage:
-#   ./ec2/deploy.sh                          # uses default key + host
-#   ./ec2/deploy.sh -k ~/.ssh/other.pem      # custom key
-#   ./ec2/deploy.sh -h 1.2.3.4              # custom host
+#   ./ec2/deploy.sh                          # reads host/key from tofu output
+#   ./ec2/deploy.sh -k ~/.ssh/other.pem      # override SSH key
+#   ./ec2/deploy.sh -h 1.2.3.4              # override host (emergency only)
 #
 # What it does:
-#   1. Syncs docker-compose.yml, .env, prometheus.yml to Oracle A1:/opt/infra/compose/
-#   2. Syncs clickhouse-init/, clickhouse-config/, postgres-init/, kafka-init/, grafana/,
-#      otel-config/, redpanda-console/ to Oracle A1
-#   3. Runs docker compose up -d on Oracle A1
-#   4. Ensures all per-service PostgreSQL databases exist
-#   5. Pre-creates Kafka topics with correct partition counts
+#   1. Reads host, user, ssh key from terraform/outputs (cloud-agnostic)
+#   2. Syncs docker-compose.yml, .env, prometheus.yml and all config dirs
+#   3. Runs docker compose up -d
+#   4. Ensures all per-service PostgreSQL databases exist (idempotent)
+#   5. Pre-creates Kafka topics with correct partition counts (idempotent)
 #   6. Verifies all 8 containers are running
-#
-# Target: Oracle Cloud A1 (arc-190) — 80.225.199.245, 24 GB RAM, Always Free
 
 set -euo pipefail
 
-# Defaults
-SSH_KEY="${HOME}/grafom/oracle-api-key.pem"
-EC2_HOST="80.225.199.245"
-EC2_USER="ubuntu"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+TOFU_DIR="${SCRIPT_DIR}/../terraform"
+
+# -------------------------------------------------------------------------
+# Read host/user/key from OpenTofu outputs (INFRA-001: single switch point)
+# Falls back to env vars, then to sensible defaults if tofu is unavailable.
+# -------------------------------------------------------------------------
+if command -v tofu &>/dev/null && [ -f "${TOFU_DIR}/terraform.tfstate" ]; then
+    EC2_HOST=$(cd "$TOFU_DIR" && tofu output -raw instance_ip   2>/dev/null || echo "")
+    EC2_USER=$(cd "$TOFU_DIR" && tofu output -raw ssh_user      2>/dev/null || echo "ubuntu")
+    SSH_KEY=$(cd  "$TOFU_DIR" && tofu output -raw ssh_key_path  2>/dev/null || echo "")
+fi
+
+EC2_HOST="${INFRA_HOST:-${EC2_HOST:-}}"
+EC2_USER="${INFRA_USER:-${EC2_USER:-ubuntu}}"
+SSH_KEY="${INFRA_SSH_KEY:-${SSH_KEY:-}}"
+
+# Parse flags (override tofu output if explicitly passed)
+while getopts "k:h:u:" opt; do
+    case $opt in
+        k) SSH_KEY="$OPTARG" ;;
+        h) EC2_HOST="$OPTARG" ;;
+        u) EC2_USER="$OPTARG" ;;
+        *) echo "Usage: $0 [-k ssh_key] [-h host] [-u user]"; exit 1 ;;
+    esac
+done
+
+if [ -z "$EC2_HOST" ] || [ -z "$SSH_KEY" ]; then
+    echo "ERROR: Could not determine host or SSH key from tofu output."
+    echo "Run 'tofu apply' first, or pass -h <host> -k <key> explicitly."
+    exit 1
+fi
+
 REMOTE_COMPOSE_DIR="/opt/infra/compose"
 REMOTE_CLICKHOUSE_DIR="/opt/infra/clickhouse/init"
 REMOTE_CLICKHOUSE_CFG_DIR="/opt/infra/clickhouse/config"
@@ -31,16 +64,6 @@ REMOTE_KAFKA_DIR="/opt/infra/kafka/init"
 REMOTE_GRAFANA_DIR="/opt/infra/grafana"
 REMOTE_OTEL_DIR="/opt/infra/otel"
 REMOTE_CONSOLE_DIR="/opt/infra/redpanda-console"
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-
-# Parse flags
-while getopts "k:h:" opt; do
-    case $opt in
-        k) SSH_KEY="$OPTARG" ;;
-        h) EC2_HOST="$OPTARG" ;;
-        *) echo "Usage: $0 [-k ssh_key] [-h ec2_host]"; exit 1 ;;
-    esac
-done
 
 SSH_CMD="ssh -i ${SSH_KEY} -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST}"
 SCP_CMD="scp -i ${SSH_KEY} -o StrictHostKeyChecking=no"
@@ -64,7 +87,7 @@ ${SSH_CMD} "sudo mkdir -p ${REMOTE_COMPOSE_DIR} \
             mkdir -p /tmp/ch_init /tmp/pg_init"
 
 # -------------------------------------------------------------------------
-# Step 2: Sync files to Oracle A1
+# Step 2: Sync files to remote host
 # -------------------------------------------------------------------------
 echo "[2/6] Syncing files..."
 
@@ -78,7 +101,7 @@ if [ -f "${SCRIPT_DIR}/.env" ]; then
     ${SSH_CMD} "sudo mv /tmp/infra.env ${REMOTE_COMPOSE_DIR}/.env"
     echo "  .env synced"
 else
-    echo "  .env not found locally — skipping (using existing on Oracle A1)"
+    echo "  .env not found locally — skipping (using existing remote .env)"
 fi
 
 # ClickHouse init SQL + Prometheus metrics config
@@ -145,7 +168,7 @@ ${SSH_CMD} 'sudo docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"'
 echo ""
 ${SSH_CMD} 'sudo docker stats --no-stream --format "table {{.Name}}\t{{.MemUsage}}"'
 echo ""
-echo "=== Deploy complete === (Oracle Cloud A1 — 80.225.199.245)"
+echo "=== Deploy complete === (${EC2_USER}@${EC2_HOST})"
 echo "  Grafana:          http://${EC2_HOST}:3000"
 echo "  Redpanda Console: http://${EC2_HOST}:8080"
 echo "  Prometheus:       http://${EC2_HOST}:9090"
